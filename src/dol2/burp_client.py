@@ -17,6 +17,7 @@ endpoint 이벤트로 메시지 POST 주소가 자동 결정된다.
 from __future__ import annotations
 
 import json
+import re
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -78,7 +79,14 @@ class BurpMcpClient:
             elif isinstance(parsed, dict):
                 items.append(_obj_to_item(parsed))
             else:
-                items.append(RawHistoryItem(request=text, response="<no response>"))
+                # 공식 Burp MCP는 N건을 '한 text 블록'에 빈 줄로 구분된 JSON 객체들로
+                # 몰아서 돌려준다(유효한 JSON 배열 아님). 통째로 1건으로 삼키지 말고
+                # 순차적으로 객체를 뽑아낸다. 하나도 못 뽑으면 원문을 그대로 1건으로.
+                objs = _extract_objects(text)
+                if objs:
+                    items.extend(_obj_to_item(o) for o in objs)
+                else:
+                    items.append(RawHistoryItem(request=text, response="<no response>"))
         return items
 
     # ---------------------------------------------------------------- #
@@ -126,6 +134,69 @@ def _safe_json(text: str) -> Any:
         return json.loads(text)
     except (json.JSONDecodeError, TypeError):
         return None
+
+
+# 한 text 블록 안에 '이어붙은' 히스토리 객체들을 관용적으로 뽑아낸다.
+# 공식 Burp MCP는 N건을 {"request":"...","response":"...","notes":"..."} 형태로
+# \n\n 로 이어붙여 한 블록에 담아 보내는데, 긴 값(특히 response 본문)을 중간에서
+# '... (truncated)' 로 잘라 버린다. 그래서 각 객체는 '유효한 JSON이 아니다'
+# (문자열이 안 닫히고 raw 제어문자까지 섞임) — json.loads / raw_decode 로는 못 쪼갠다.
+# 따라서 JSON 파싱을 포기하고, 객체 경계({"request":")로 나눈 뒤 각 청크에서
+# request/response/notes 문자열만 이스케이프를 해석하며 뽑는다. 잘렸으면 거기까지만.
+# dol2 분석에 필요한 요청라인·헤더·상태코드는 잘림 지점 앞에 있어 지장 없다.
+_ITEM_START = re.compile(r'\{"request":"')
+_ESC = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f",
+        '"': '"', "\\": "\\", "/": "/"}
+
+
+def _read_json_string(text: str, i: int) -> tuple[str, int]:
+    """text[i] 는 여는 따옴표. (디코딩된 값, 닫는따옴표_다음_index) 반환.
+
+    닫는 따옴표를 만나기 전에 끝(잘림)에 닿으면 그때까지 모은 값을 돌려준다.
+    """
+    i += 1
+    out: list[str] = []
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "\\":
+            if i + 1 >= n:
+                break  # 매달린 백슬래시 = 잘림
+            d = text[i + 1]
+            if d == "u" and i + 5 < n:
+                try:
+                    out.append(chr(int(text[i + 2:i + 6], 16)))
+                    i += 6
+                    continue
+                except ValueError:
+                    pass
+            out.append(_ESC.get(d, d))
+            i += 2
+            continue
+        if c == '"':
+            return "".join(out), i + 1
+        out.append(c)
+        i += 1
+    return "".join(out), i  # 끝까지 = 잘림
+
+
+def _extract_objects(text: str) -> list[dict]:
+    starts = [m.start() for m in _ITEM_START.finditer(text)]
+    objs: list[dict] = []
+    for k, s in enumerate(starts):
+        e = starts[k + 1] if k + 1 < len(starts) else len(text)
+        chunk = text[s:e]
+        obj = {"request": "", "response": "<no response>", "notes": ""}
+        for key in ("request", "response", "notes"):
+            kp = chunk.find('"%s":' % key)
+            if kp == -1:
+                continue
+            oq = chunk.find('"', kp + len('"%s":' % key))
+            if oq == -1:
+                continue
+            obj[key], _ = _read_json_string(chunk, oq)
+        objs.append(obj)
+    return objs
 
 
 def _obj_to_item(obj: dict) -> RawHistoryItem:
