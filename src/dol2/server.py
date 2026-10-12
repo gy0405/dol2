@@ -21,6 +21,7 @@ from mcp.server.mcpserver import MCPServer
 
 from .burp_client import BurpMcpClient
 from .config import BurpConfig, ScopeConfig
+from .coverage import build_coverage, render_coverage
 from .gate import run_detectors
 from .guide import guide_items_for, render_report
 from .models import parse_history_item
@@ -86,6 +87,7 @@ async def analyze_history(
 
     records = _pipeline(raw_items, scope)
     findings = run_detectors(records)
+    coverage = build_coverage(records)
 
     findings_out = []
     for f in findings:
@@ -104,9 +106,10 @@ async def analyze_history(
             "findings": len(findings),
             "note": "판정이 아니라 우선순위화. 각 항목은 history_index로 원본 패킷 확인 필요.",
         },
-        # 가이드 양식 결과지(텍스트). 사용자가 바로 읽는 보고서 형태.
-        "report": render_report(findings),
+        # 가이드 양식 결과지 + 커버리지 피드백(텍스트). 사용자가 바로 읽는 보고서 형태.
+        "report": render_report(findings) + "\n\n" + render_coverage(coverage),
         "findings": findings_out,
+        "coverage": [asdict(c) for c in coverage],
     }
 
 

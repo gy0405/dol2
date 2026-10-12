@@ -224,3 +224,29 @@ def test_guide_mapping():
     report = render_report([f])
     assert "[XS] 크로스사이트 스크립트" in report
     assert "가이드 p.711" in report
+
+
+# --------------------------------------------------------------------------- #
+# 커버리지 피드백
+# --------------------------------------------------------------------------- #
+def test_coverage_flags_missing_session_and_idor():
+    from dol2.coverage import build_coverage
+    # language 쿠키만 있는 평범한 GET → 세션 없음, 객체참조 없음
+    item = RawHistoryItem(
+        request=_req("GET", "/rest/products/search?q=x", {"Cookie": "language=en"}),
+        response=_resp(200, {"Content-Type": "application/json"}),
+    )
+    cov = {c.code: c.status for c in build_coverage(_run([item]))}
+    assert cov["IN"] == "none"   # 객체참조 트래픽 없음
+    assert cov["IS"] == "none"   # 세션 없음
+
+
+def test_coverage_idor_insufficient_with_single_identity():
+    from dol2.coverage import build_coverage
+    item = RawHistoryItem(
+        request=_req("GET", "/api/orders/1", {"Authorization": f"Bearer {JWT_U1}"}),
+        response=_resp(200, {"Content-Type": "application/json"}),
+    )
+    cov = {c.code: c.status for c in build_coverage(_run([item]))}
+    assert cov["IN"] == "insufficient"  # {id}는 있는데 신원 1개뿐
+    assert cov["IS"] == "ok"            # Bearer 토큰 = 세션/인증 트래픽
