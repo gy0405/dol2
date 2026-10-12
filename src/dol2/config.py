@@ -10,18 +10,19 @@ from dataclasses import dataclass, field
 
 @dataclass
 class BurpConfig:
-    """공식 Burp MCP(SSE) 접속 설정.
+    """공식 Burp MCP 접속 설정.
 
-    Burp 쪽 ``MCP`` 탭의 Host/Port(기본 127.0.0.1:9876)와 맞춰야 한다.
-    SSE 엔드포인트 경로는 Burp 버전에 따라 다를 수 있으니(보통 ``/sse``)
-    실제 탭에 표시되는 URL로 맞추는 것을 권장한다.
+    공식 Burp MCP(kotlin-sdk 0.15)는 **Streamable HTTP** 트랜스포트를 루트
+    경로에 노출한다(옛 SSE 아님). Burp 쪽 ``MCP`` 탭의 Host/Port(기본
+    127.0.0.1:9876)와 맞춘다. 엔드포인트가 루트가 아니면 ``http_path``로 맞춘다.
     """
 
     base_url: str = field(
         default_factory=lambda: os.environ.get("DOL2_BURP_BASE_URL", "http://127.0.0.1:9876")
     )
-    sse_path: str = field(
-        default_factory=lambda: os.environ.get("DOL2_BURP_SSE_PATH", "/sse")
+    # Streamable HTTP 엔드포인트 경로. 공식 서버는 루트("")라 보통 비워 둔다.
+    http_path: str = field(
+        default_factory=lambda: os.environ.get("DOL2_BURP_HTTP_PATH", "")
     )
     # 한 번에 끌어올 히스토리 페이지 크기(공식 서버가 count/offset 페이지네이션 제공).
     page_size: int = field(
@@ -30,8 +31,9 @@ class BurpConfig:
     connect_timeout: float = 5.0
 
     @property
-    def sse_url(self) -> str:
-        return self.base_url.rstrip("/") + "/" + self.sse_path.lstrip("/")
+    def endpoint_url(self) -> str:
+        base = self.base_url.rstrip("/")
+        return base + "/" + self.http_path.lstrip("/") if self.http_path else base
 
 
 @dataclass

@@ -87,7 +87,7 @@ flowchart TD
 - `send_http1_request` / `send_http2_request` — 재전송(능동 검증). 스캐너 없이 "이 벡터 진짜 통하나?" 확인용
 - `get_scanner_issues` — *(옵션, 나중에 스캐너 연동 시)*
 
-접속은 SSE(기본 `http://127.0.0.1:9876`). Burp의 `MCP` 탭 Host/Port와 맞춘다.
+접속은 **Streamable HTTP**(기본 `http://127.0.0.1:9876`, 루트 경로). 공식 서버(kotlin-sdk 0.15)는 옛 HTTP+SSE가 아니라 Streamable HTTP를 쓴다. Burp의 `MCP` 탭 Host/Port와 맞춘다.
 
 ## 알려진 한계 (솔직하게)
 
@@ -114,5 +114,6 @@ Burp 접속 설정은 환경변수로:
 
 ```bash
 export DOL2_BURP_BASE_URL=http://127.0.0.1:9876
-export DOL2_BURP_SSE_PATH=/sse
+# 엔드포인트가 루트가 아닐 때만 설정 (공식 서버는 보통 비워 둠)
+export DOL2_BURP_HTTP_PATH=
 ```
