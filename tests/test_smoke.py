@@ -204,3 +204,23 @@ def test_session_cookie_still_counts():
     recs = _run([item])
     assert recs and recs[0].identity.source == "cookie"
     assert "auth-material" in recs[0].signals
+
+
+# --------------------------------------------------------------------------- #
+# 주요정보통신기반시설 가이드(웹) 매핑
+# --------------------------------------------------------------------------- #
+def test_guide_mapping():
+    from dol2.guide import guide_items_for, render_report
+    assert guide_items_for("reflected-xss")[0].code == "XS"
+    assert guide_items_for("horizontal-authz")[0].code == "IN"
+    assert guide_items_for("cookie-samesite-csrf-chain")[0].code == "CF"
+    assert guide_items_for("header-clickjacking-chain") == []  # 전용 항목 없음
+
+    f = Finding(
+        vector="reflected-xss", severity="high", endpoint_template="GET /search",
+        precondition="입력 반사", enabling_condition="HTML 미인코딩",
+        attack_class="반사형 XSS", poc_sketch="payload 확인", cve_hint="CWE-79",
+    )
+    report = render_report([f])
+    assert "[XS] 크로스사이트 스크립트" in report
+    assert "가이드 p.711" in report

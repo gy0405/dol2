@@ -22,6 +22,7 @@ from mcp.server.mcpserver import MCPServer
 from .burp_client import BurpMcpClient
 from .config import BurpConfig, ScopeConfig
 from .gate import run_detectors
+from .guide import guide_items_for, render_report
 from .models import parse_history_item
 from .pipeline.filter import coarse_filter
 from .pipeline.normalize import normalize
@@ -86,6 +87,16 @@ async def analyze_history(
     records = _pipeline(raw_items, scope)
     findings = run_detectors(records)
 
+    findings_out = []
+    for f in findings:
+        d = asdict(f)
+        # 주요정보통신기반시설 가이드(웹) 항목 매핑을 붙임
+        d["guide_refs"] = [
+            {"code": g.code, "name": g.name, "severity": g.severity, "page": g.page}
+            for g in guide_items_for(f.vector)
+        ]
+        findings_out.append(d)
+
     return {
         "summary": {
             "raw_fetched": len(raw_items),
@@ -93,7 +104,9 @@ async def analyze_history(
             "findings": len(findings),
             "note": "판정이 아니라 우선순위화. 각 항목은 history_index로 원본 패킷 확인 필요.",
         },
-        "findings": [asdict(f) for f in findings],
+        # 가이드 양식 결과지(텍스트). 사용자가 바로 읽는 보고서 형태.
+        "report": render_report(findings),
+        "findings": findings_out,
     }
 
 
