@@ -171,3 +171,36 @@ def test_httponly_no_chain_without_xss_surface():
     )
     findings = run_detectors(_run([login]))
     assert all(f.vector != "cookie-httponly-xss-chain" for f in findings)
+
+
+# --------------------------------------------------------------------------- #
+# 무해한 쿠키를 인증 재료로 오인하지 않는지 (실측에서 나온 버그)
+# --------------------------------------------------------------------------- #
+def test_benign_cookie_not_auth_material():
+    # language 쿠키만 달린 정적 .js 는 노이즈로 걸러져야 함
+    item = RawHistoryItem(
+        request=_req("GET", "/main.js", {"Cookie": "language=en"}),
+        response=_resp(200, {"Content-Type": "application/javascript"}),
+    )
+    recs = _run([item])
+    assert recs == []  # 필터에서 제거됨
+
+
+def test_benign_cookie_identity_is_anon():
+    item = RawHistoryItem(
+        request=_req("GET", "/rest/products/search?q=", {"Cookie": "language=en"}),
+        response=_resp(200, {"Content-Type": "application/json"}),
+    )
+    recs = _run([item])
+    assert recs and recs[0].identity.label == "anon"
+    assert "auth-material" not in recs[0].signals
+
+
+def test_session_cookie_still_counts():
+    item = RawHistoryItem(
+        request=_req("GET", "/account", {"Cookie": "language=en; session=abc123"}),
+        response=_resp(200, {"Content-Type": "text/html"}),
+    )
+    recs = _run([item])
+    assert recs and recs[0].identity.source == "cookie"
+    assert "auth-material" in recs[0].signals

@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 
 from ..models import HttpRecord
+from .normalize import auth_cookie_fingerprint
 
 _STATE_CHANGING = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -34,7 +35,7 @@ def _signals_for(rec: HttpRecord) -> list[str]:
     req = rec.request
     sig: list[str] = []
 
-    if req.headers.get("authorization") or req.headers.get("cookie"):
+    if req.headers.get("authorization") or auth_cookie_fingerprint(req.headers.get("cookie", "")):
         sig.append("auth-material")
 
     # 객체 참조: 경로에 {id}가 생겼거나 쿼리/본문에 id류 파라미터

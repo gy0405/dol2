@@ -9,6 +9,7 @@ import re
 
 from ..config import ScopeConfig
 from ..models import HttpRecord
+from .normalize import auth_cookie_fingerprint
 
 # 정적 자원 확장자(이것만으로 버리진 않고, 상태변경/인증재료 없을 때만 버림)
 _STATIC_EXT = re.compile(
@@ -39,9 +40,11 @@ def is_noise(rec: HttpRecord) -> bool:
     if req.method == "OPTIONS":
         return True
 
-    # 인증 재료가 실려 있으면 정적 자원이라도 일단 남긴다(세션 고정/탈취 맥락일 수 있음)
+    # 인증 재료가 실려 있으면 정적 자원이라도 일단 남긴다(세션 고정/탈취 맥락일 수 있음).
+    # 단 language 같은 무해한 쿠키는 인증 재료로 치지 않는다.
     has_auth_material = bool(
-        req.headers.get("authorization") or req.headers.get("cookie")
+        req.headers.get("authorization")
+        or auth_cookie_fingerprint(req.headers.get("cookie", ""))
     )
 
     if _STATIC_EXT.search(req.target) and not has_auth_material:

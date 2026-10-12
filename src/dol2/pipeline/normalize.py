@@ -17,6 +17,12 @@ import re
 from ..models import HttpRecord, Identity, ParsedRequest
 
 # 경로 세그먼트 중 '변수'로 볼 패턴 → {id} 치환
+# 세션/인증스러운 쿠키 이름 패턴. language, welcomebanner_status, _ga 같은
+# 무해한 쿠키는 인증 재료로 보지 않는다(실측에서 드러난 오탐 원인).
+_AUTH_COOKIE_RE = re.compile(
+    r"(?i)(sessionid|session|jsessionid|phpsessid|connect\.sid|csrf|xsrf|token|jwt|auth|remember)"
+)
+
 _NUMERIC = re.compile(r"^\d+$")
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 _HEXLONG = re.compile(r"^[0-9a-fA-F]{16,}$")
@@ -42,6 +48,20 @@ def endpoint_template(req: ParsedRequest) -> str:
 # --------------------------------------------------------------------------- #
 # 신원 라벨링 — 어디까지나 '추정'. confidence와 source를 같이 노출한다.
 # --------------------------------------------------------------------------- #
+def auth_cookie_fingerprint(cookie_header: str) -> str | None:
+    """쿠키 헤더에서 세션/인증스러운 쿠키 쌍만 추려 지문을 만든다.
+
+    무해한 쿠키(language 등)만 있으면 None → 인증 재료 아님.
+    filter/score/normalize가 "인증 재료가 있나"를 판단할 때 공통으로 쓴다.
+    """
+    parts = []
+    for kv in cookie_header.split(";"):
+        name = kv.split("=", 1)[0].strip()
+        if name and _AUTH_COOKIE_RE.search(name):
+            parts.append(kv.strip())
+    return ";".join(parts) if parts else None
+
+
 def _decode_jwt_sub(token: str) -> dict[str, str] | None:
     """JWT payload를 *검증 없이* 디코드해 참고용 클레임만 읽는다."""
     parts = token.split(".")
@@ -82,13 +102,14 @@ def infer_identity(req: ParsedRequest) -> Identity:
             label=f"auth:{_short_hash(auth)}", source="authorization", confidence=0.6
         )
 
-    # 2) 세션 쿠키로 그룹(쿠키 전체 해시 — 세션 식별자가 바뀌면 다른 주체로 추정)
-    if cookie:
+    # 2) 세션/인증 쿠키로 그룹(무해한 쿠키는 제외 — 그 지문이 바뀌면 다른 주체로 추정)
+    fp = auth_cookie_fingerprint(cookie)
+    if fp:
         return Identity(
-            label=f"cookie:{_short_hash(cookie)}", source="cookie", confidence=0.4
+            label=f"cookie:{_short_hash(fp)}", source="cookie", confidence=0.4
         )
 
-    # 3) 아무 신원 재료 없음
+    # 3) 아무 신원 재료 없음 (무해한 쿠키만 있는 경우 포함)
     return Identity(label="anon", source="none", confidence=0.3)
 
 
