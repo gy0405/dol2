@@ -6,10 +6,12 @@
 from .base import VectorDetector
 from .chains import CookieFlagChain, SecurityHeaderChain
 from .idor import HorizontalAuthzDetector
+from .xss import ReflectedXssDetector
 
 # 기본 탐지기 레지스트리. 여기 추가하면 서버가 자동으로 돌린다.
 DEFAULT_DETECTORS: list[VectorDetector] = [
     HorizontalAuthzDetector(),
+    ReflectedXssDetector(),
     CookieFlagChain(),
     SecurityHeaderChain(),
 ]
@@ -19,5 +21,6 @@ __all__ = [
     "CookieFlagChain",
     "SecurityHeaderChain",
     "HorizontalAuthzDetector",
+    "ReflectedXssDetector",
     "DEFAULT_DETECTORS",
 ]

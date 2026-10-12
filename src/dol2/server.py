@@ -26,6 +26,7 @@ from .models import parse_history_item
 from .pipeline.filter import coarse_filter
 from .pipeline.normalize import normalize
 from .pipeline.score import score
+from .vectors.xss import tag_xss_surface
 
 server = MCPServer(name="dol2", version="0.1.0",
                    instructions="Burp 트래픽 기반 취약점 판단 '지원' 도구. 판정이 아니라 우선순위화.")
@@ -42,6 +43,7 @@ def _pipeline(raw_items, scope: ScopeConfig):
     records = coarse_filter(records, scope)
     records = normalize(records)
     records = score(records)
+    records = tag_xss_surface(records)   # 반사형 XSS 표면에 'xss-surface' 신호 부착
     return records
 
 

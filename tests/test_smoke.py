@@ -14,6 +14,13 @@ from dol2.models import Finding, RawHistoryItem, parse_history_item
 from dol2.pipeline.filter import coarse_filter
 from dol2.pipeline.normalize import endpoint_template, normalize
 from dol2.pipeline.score import score
+from dol2.vectors.xss import tag_xss_surface
+
+
+def _run(items):
+    """filter → normalize → score → xss 태깅까지 돌린 레코드."""
+    recs = [parse_history_item(it) for it in items]
+    return tag_xss_surface(score(normalize(coarse_filter(recs))))
 
 # user 1 의 JWT (sub=1), user 2 의 JWT (sub=2) — 서명 무의미, payload만.
 JWT_U1 = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig"
@@ -103,3 +110,64 @@ def test_horizontal_authz_candidate():
     )))
     findings = run_detectors(recs)
     assert any(f.vector == "horizontal-authz" for f in findings)
+
+
+# --------------------------------------------------------------------------- #
+# 반사형 XSS 표면 + 깨어난 체인들
+# --------------------------------------------------------------------------- #
+HTML = {"Content-Type": "text/html; charset=utf-8"}
+
+
+def test_reflected_xss_surface_flagged():
+    # 쿼리값 '"><b>'가 HTML 응답에 인코딩 안 된 채 그대로 반사 → 후보로 올라와야 함
+    payload = '"><b>x'
+    item = RawHistoryItem(
+        request=_req("GET", "/search?q=%22%3E%3Cb%3Ex"),  # URL인코딩된 "><b>x
+        response=_resp(200, HTML, body=f"<p>검색어: {payload}</p>"),
+    )
+    findings = run_detectors(_run([item]))
+    assert any(f.vector == "reflected-xss" for f in findings)
+
+
+def test_reflected_xss_encoded_is_not_flagged():
+    # 같은 입력이 인코딩돼 반사되면(&lt;) 표면 아님 → 안 올라와야 함
+    item = RawHistoryItem(
+        request=_req("GET", "/search?q=%22%3E%3Cb%3Ex"),
+        response=_resp(200, HTML, body="<p>검색어: &quot;&gt;&lt;b&gt;x</p>"),
+    )
+    findings = run_detectors(_run([item]))
+    assert all(f.vector != "reflected-xss" for f in findings)
+
+
+def test_reflected_xss_non_html_is_not_flagged():
+    # JSON 응답이면 반사돼도 반사형 XSS 표면으로 안 봄
+    item = RawHistoryItem(
+        request=_req("GET", "/api/search?q=%22%3E%3Cb%3Ex"),
+        response=_resp(200, {"Content-Type": "application/json"}, body='{"q":"\\"><b>x"}'),
+    )
+    findings = run_detectors(_run([item]))
+    assert all(f.vector != "reflected-xss" for f in findings)
+
+
+def test_httponly_chain_wakes_with_xss_surface():
+    # HttpOnly 없는 세션쿠키 + 같은 트래픽에 XSS 표면 → 체인 성립
+    login = RawHistoryItem(
+        request=_req("POST", "/login"),
+        response=_resp(200, {"Set-Cookie": "SID=abc; Secure"}),  # HttpOnly 없음
+    )
+    xss = RawHistoryItem(
+        request=_req("GET", "/search?q=%22%3E%3Cb%3Ex"),
+        response=_resp(200, HTML, body='<p>"><b>x</p>'),
+    )
+    findings = run_detectors(_run([login, xss]))
+    assert any(f.vector == "cookie-httponly-xss-chain" for f in findings)
+
+
+def test_httponly_no_chain_without_xss_surface():
+    # XSS 표면이 없으면 HttpOnly 부재만으로는 안 올라와야 함
+    login = RawHistoryItem(
+        request=_req("POST", "/login"),
+        response=_resp(200, {"Set-Cookie": "SID=abc; Secure"}),
+    )
+    findings = run_detectors(_run([login]))
+    assert all(f.vector != "cookie-httponly-xss-chain" for f in findings)
