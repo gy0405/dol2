@@ -1,0 +1,24 @@
+[project]
+name = "dol2"
+version = "0.1.0"
+description = "돌돌이 — Burp Suite 트래픽 기반 취약점 판단 지원 MCP 서버"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # 공식 MCP Python SDK. 2.x에서 FastMCP가 MCPServer로 개명됨.
+    # 아래 코드는 2.x API(mcp.server.mcpserver.MCPServer, mcp.client.sse.sse_client)에 맞춰져 있음.
+    "mcp>=2,<3",
+]
+
+[project.scripts]
+dol2 = "dol2.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dol2"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
