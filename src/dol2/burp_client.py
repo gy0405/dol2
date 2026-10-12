@@ -1,7 +1,9 @@
 """공식 Burp MCP 서버에 MCP 클라이언트로 붙는 계층.
 
-공식 Burp MCP(kotlin-sdk 0.15)는 Streamable HTTP 트랜스포트를 루트 경로에 노출한다
-(옛 HTTP+SSE 아님). 그래서 streamable_http_client로 접속한다.
+공식 Burp MCP는 kotlin-sdk의 ``Application.mcp { }``로 서버를 띄우는데, 이건
+**옛 HTTP+SSE 트랜스포트를 "루트 경로(/)"에** 연다(Streamable HTTP 아님).
+따라서 sse_client로 base URL(경로 없음)에 접속한다. SSE 스트림이 보내주는
+endpoint 이벤트로 메시지 POST 주소가 자동 결정된다.
 
 돌돌이는 여기서 패킷을 끌어온다. 공식 서버가 노출하는 도구 중 돌돌이가 쓰는 것:
 
@@ -19,7 +21,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 from mcp.client.session import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.sse import sse_client
 
 from .config import BurpConfig
 from .models import RawHistoryItem
@@ -34,8 +36,11 @@ class BurpMcpClient:
 
     @asynccontextmanager
     async def connect(self) -> AsyncIterator["BurpMcpClient"]:
-        """Streamable HTTP 세션을 열고 initialize까지 마친 상태로 넘긴다."""
-        async with streamable_http_client(self.config.endpoint_url) as (read, write):
+        """SSE 세션(루트 경로)을 열고 initialize까지 마친 상태로 넘긴다."""
+        async with sse_client(self.config.endpoint_url, timeout=self.config.connect_timeout) as (
+            read,
+            write,
+        ):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 self._session = session

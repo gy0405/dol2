@@ -12,15 +12,15 @@ from dataclasses import dataclass, field
 class BurpConfig:
     """공식 Burp MCP 접속 설정.
 
-    공식 Burp MCP(kotlin-sdk 0.15)는 **Streamable HTTP** 트랜스포트를 루트
-    경로에 노출한다(옛 SSE 아님). Burp 쪽 ``MCP`` 탭의 Host/Port(기본
-    127.0.0.1:9876)와 맞춘다. 엔드포인트가 루트가 아니면 ``http_path``로 맞춘다.
+    공식 Burp MCP는 옛 **HTTP+SSE** 트랜스포트를 "루트 경로(/)"에 노출한다
+    (Streamable HTTP 아님). Burp 쪽 ``MCP`` 탭의 Host/Port(기본 127.0.0.1:9876)와
+    맞춘다. SSE 엔드포인트가 루트가 아니면 ``http_path``로 맞춘다.
     """
 
     base_url: str = field(
         default_factory=lambda: os.environ.get("DOL2_BURP_BASE_URL", "http://127.0.0.1:9876")
     )
-    # Streamable HTTP 엔드포인트 경로. 공식 서버는 루트("")라 보통 비워 둔다.
+    # SSE 엔드포인트 경로. 공식 서버는 루트("")라 보통 비워 둔다.
     http_path: str = field(
         default_factory=lambda: os.environ.get("DOL2_BURP_HTTP_PATH", "")
     )
