@@ -104,6 +104,8 @@ flowchart TD
 
 매핑 예: `reflected-xss`→XS(크로스사이트 스크립트), `horizontal-authz`→IN(불충분한 권한 검증), `cookie-samesite-csrf-chain`→CF(CSRF), `cookie-secure/hsts`→SN(데이터 평문 전송), `cookie-httponly`→IS(불충분한 세션 관리). 전용 항목이 없는 Clickjacking 등은 '해당 없음'으로 솔직히 표기.
 
+돌돌이는 **Burp에 쌓인 트래픽만** 보므로, 안 돌아다닌 기능은 평가하지 못한다. 어떤 기능을 어떻게 사용해야 각 항목이 평가되는지는 [트래픽 플레이북](docs/traffic-playbook.md) 참고.
+
 **다음 단계는 기능 추가가 아니라 실측이다** — Juice Shop 같은 테스트 서버에 Burp를 걸고 돌돌이를 실제로 돌려 정탐/오탐을 확인한다. (저장형 XSS, 수직 권한 상승은 그 이후.)
 
 ## 설치 / 실행
